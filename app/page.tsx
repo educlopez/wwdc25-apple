@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Apple, Wifi, WifiOff, ExternalLink, Clock, Calendar, Play, Pause, RefreshCw } from "lucide-react"
+import { Apple, Wifi, WifiOff, ExternalLink, Clock, Calendar, Play, Pause, RefreshCw, AlertCircle } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -14,7 +14,7 @@ import { track } from "@vercel/analytics"
 interface WWDCUpdate {
   id: string
   timestamp: string
-  type: "news" | "official" | "live"
+  type: "news" | "apple-official" | "live"
   title: string
   description: string
   author?: string
@@ -30,23 +30,50 @@ interface LiveStatus {
   keynoteStartsIn: number
   currentHour: number
   keynoteHour: number
+  isWWDCWeek: boolean
+  currentDate: string
+  minutesUntilKeynote: number
 }
 
 export default function WWDC25LiveTracker() {
-  const [updates, setUpdates] = useState<WWDCUpdate[]>([])
+  const [newsUpdates, setNewsUpdates] = useState<WWDCUpdate[]>([])
+  const [appleUpdates, setAppleUpdates] = useState<WWDCUpdate[]>([])
   const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isConnected, setIsConnected] = useState(true)
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
   const [autoRefresh, setAutoRefresh] = useState(true)
-  const [activeTab, setActiveTab] = useState("all")
+  const [activeTab, setActiveTab] = useState("news")
+  const [apiErrors, setApiErrors] = useState<string[]>([])
   const { toast } = useToast()
+
+  // Helper function to check if article is breaking (today or last hour)
+  const isBreakingNews = (publishedAt: string, title: string) => {
+    const articleTime = new Date(publishedAt)
+    const now = new Date()
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000)
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+
+    // Breaking if:
+    // 1. Published in the last hour, OR
+    // 2. Published today AND contains urgent keywords
+    const isLastHour = articleTime >= oneHourAgo
+    const isToday = articleTime >= todayStart
+    const hasUrgentKeywords =
+      title.toLowerCase().includes("breaking") ||
+      title.toLowerCase().includes("live") ||
+      title.toLowerCase().includes("just announced")
+
+    return isLastHour || (isToday && hasUrgentKeywords)
+  }
 
   const fetchWWDC25Data = async () => {
     if (isRefreshing) return
 
     setIsRefreshing(true)
+    setApiErrors([])
+
     try {
       // Track data fetch events
       track("data_fetch", {
@@ -59,46 +86,68 @@ export default function WWDC25LiveTracker() {
       const liveStatusData = await liveStatusResponse.json()
       setLiveStatus(liveStatusData)
 
-      // Fetch only news data
-      const [newsData] = await Promise.allSettled([fetch("/api/news").then((res) => res.json())])
+      // Fetch from data sources (removed YouTube API)
+      const [newsData, appleRssData] = await Promise.allSettled([
+        fetch("/api/news").then(async (res) => {
+          if (!res.ok) {
+            const errorData = await res.json()
+            throw new Error(`News API: ${errorData.error || res.statusText}`)
+          }
+          return res.json()
+        }),
+        fetch("/api/apple-rss").then(async (res) => {
+          if (!res.ok) {
+            const errorData = await res.json()
+            throw new Error(`Apple RSS: ${errorData.error || res.statusText}`)
+          }
+          return res.json()
+        }),
+      ])
 
-      const allUpdates: WWDCUpdate[] = []
+      const newsAllUpdates: WWDCUpdate[] = []
+      const appleAllUpdates: WWDCUpdate[] = []
+      const errors: string[] = []
 
-      // Process News data with WWDC filtering
+      // Process News API data
       if (newsData.status === "fulfilled" && newsData.value.articles) {
-        const articles = newsData.value.articles
-          .filter((article: any) => {
-            const content = `${article.title} ${article.description || ""}`.toLowerCase()
-            return (
-              content.includes("wwdc") ||
-              (content.includes("apple") && (content.includes("developer") || content.includes("keynote"))) ||
-              content.includes("ios 19") ||
-              content.includes("macos 15") ||
-              content.includes("watchos 11") ||
-              content.includes("tvos 18") ||
-              content.includes("visionos 2") ||
-              content.includes("xcode 16") ||
-              content.includes("swift 6")
-            )
-          })
-          .map((article: any) => ({
-            id: article.url,
-            timestamp: article.publishedAt,
-            type: "news" as const,
-            title: article.title,
-            description: article.description || article.content?.substring(0, 200),
-            author: article.author,
-            url: article.url,
-            source: article.source.name,
-            isBreaking:
-              article.title.toLowerCase().includes("breaking") ||
-              article.title.toLowerCase().includes("live") ||
-              new Date(article.publishedAt).getTime() > Date.now() - 3600000,
-          }))
-        allUpdates.push(...articles)
+        console.log("News API returned", newsData.value.articles.length, "articles")
+        const articles = newsData.value.articles.map((article: any) => ({
+          id: `news-${article.url}`,
+          timestamp: article.publishedAt,
+          type: "news" as const,
+          title: article.title,
+          description: article.description || article.content?.substring(0, 200) || "Read more...",
+          author: article.author,
+          url: article.url,
+          source: article.source.name,
+          isBreaking: isBreakingNews(article.publishedAt, article.title),
+        }))
+        newsAllUpdates.push(...articles)
+      } else if (newsData.status === "rejected") {
+        errors.push(`News API: ${newsData.reason.message}`)
+        console.error("News API failed:", newsData.reason)
       }
 
-      // Add live updates during keynote
+      // Process Apple Official RSS data
+      if (appleRssData.status === "fulfilled" && appleRssData.value.articles) {
+        console.log("Apple RSS returned", appleRssData.value.articles.length, "articles")
+        const rssArticles = appleRssData.value.articles.map((article: any) => ({
+          id: `apple-${article.url}`,
+          timestamp: article.publishedAt,
+          type: "apple-official" as const,
+          title: article.title,
+          description: article.description,
+          url: article.url,
+          source: article.source.name,
+          isBreaking: isBreakingNews(article.publishedAt, article.title),
+        }))
+        appleAllUpdates.push(...rssArticles)
+      } else if (appleRssData.status === "rejected") {
+        errors.push(`Apple RSS: ${appleRssData.reason.message}`)
+        console.error("Apple RSS failed:", appleRssData.reason)
+      }
+
+      // Add live updates when ACTUALLY live
       if (liveStatusData.isLive) {
         const liveUpdates: WWDCUpdate[] = [
           {
@@ -112,7 +161,7 @@ export default function WWDC25LiveTracker() {
             url: "https://www.apple.com/apple-events/",
           },
         ]
-        allUpdates.push(...liveUpdates)
+        newsAllUpdates.push(...liveUpdates)
 
         // Track when keynote goes live
         track("keynote_live", {
@@ -120,27 +169,44 @@ export default function WWDC25LiveTracker() {
         })
       }
 
-      // Sort by timestamp and breaking news priority
-      allUpdates.sort((a, b) => {
-        if (a.isBreaking && !b.isBreaking) return -1
-        if (!a.isBreaking && b.isBreaking) return 1
-        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-      })
+      // Sort both arrays by timestamp and breaking news priority
+      const sortUpdates = (updates: WWDCUpdate[]) => {
+        return updates.sort((a, b) => {
+          if (a.isBreaking && !b.isBreaking) return -1
+          if (!a.isBreaking && b.isBreaking) return 1
+          return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        })
+      }
 
-      setUpdates(allUpdates.slice(0, 100))
+      setNewsUpdates(sortUpdates(newsAllUpdates).slice(0, 100))
+      setAppleUpdates(sortUpdates(appleAllUpdates).slice(0, 50))
       setLastUpdate(new Date())
       setIsConnected(true)
+      setApiErrors(errors)
 
-      if (!isLoading && allUpdates.length > 0 && allUpdates[0].id !== updates[0]?.id) {
+      const totalUpdates = newsAllUpdates.length + appleAllUpdates.length
+
+      console.log(`Total updates: ${totalUpdates} (News: ${newsAllUpdates.length}, Apple: ${appleAllUpdates.length})`)
+
+      if (!isLoading && totalUpdates > 0) {
         toast({
           title: "New updates available",
-          description: `${allUpdates.length} WWDC25 updates loaded`,
+          description: `${newsAllUpdates.length} news updates, ${appleAllUpdates.length} Apple official updates`,
         })
 
         // Track new updates
         track("new_updates", {
-          count: allUpdates.length,
-          breaking_count: allUpdates.filter((u) => u.isBreaking).length,
+          news_count: newsAllUpdates.length,
+          apple_count: appleAllUpdates.length,
+          breaking_count: [...newsAllUpdates, ...appleAllUpdates].filter((u) => u.isBreaking).length,
+        })
+      }
+
+      if (errors.length > 0) {
+        toast({
+          title: "Some APIs failed",
+          description: `${errors.length} API(s) had errors. Check console for details.`,
+          variant: "destructive",
         })
       }
     } catch (error) {
@@ -173,14 +239,19 @@ export default function WWDC25LiveTracker() {
 
     let interval: NodeJS.Timeout
     if (autoRefresh) {
-      const refreshRate = liveStatus?.isLive ? 30000 : 120000
+      // More frequent updates as we approach keynote time
+      const refreshRate = liveStatus?.isLive
+        ? 15000
+        : liveStatus?.minutesUntilKeynote && liveStatus.minutesUntilKeynote < 30
+          ? 30000
+          : 120000
       interval = setInterval(fetchWWDC25Data, refreshRate)
     }
 
     return () => {
       if (interval) clearInterval(interval)
     }
-  }, [autoRefresh, liveStatus?.isLive])
+  }, [autoRefresh, liveStatus?.isLive, liveStatus?.minutesUntilKeynote])
 
   const handleTabChange = (value: string) => {
     setActiveTab(value)
@@ -228,10 +299,23 @@ export default function WWDC25LiveTracker() {
         return "bg-gradient-to-r from-red-500 to-pink-500"
       case "news":
         return "bg-gradient-to-r from-green-500 to-emerald-500"
-      case "official":
+      case "apple-official":
         return "bg-gradient-to-r from-purple-500 to-violet-500"
       default:
         return "bg-gradient-to-r from-gray-500 to-slate-500"
+    }
+  }
+
+  const getTypeName = (type: string) => {
+    switch (type) {
+      case "live":
+        return "LIVE"
+      case "news":
+        return "NEWS"
+      case "apple-official":
+        return "APPLE"
+      default:
+        return "UPDATE"
     }
   }
 
@@ -253,18 +337,35 @@ export default function WWDC25LiveTracker() {
       return "🔴 KEYNOTE LIVE NOW"
     }
 
-    if (liveStatus.keynoteStartsIn > 0) {
-      return `⏰ Keynote starts in ${liveStatus.keynoteStartsIn} hours (7:00 PM Spain)`
+    if (!liveStatus.isWWDCWeek) {
+      return "📅 WWDC25: June 9-13, 2025"
     }
 
-    return "✅ Keynote completed"
+    if (liveStatus.minutesUntilKeynote && liveStatus.minutesUntilKeynote > 0 && liveStatus.minutesUntilKeynote < 60) {
+      return `⏰ Keynote starts in ${liveStatus.minutesUntilKeynote} minutes!`
+    }
+
+    if (liveStatus.keynoteStartsIn > 0) {
+      return `⏰ Keynote starts in ${liveStatus.keynoteStartsIn} hours (19:00 Spain)`
+    }
+
+    return "✅ Today's sessions completed"
   }
 
-  const filteredUpdates = updates.filter((update) => {
-    if (activeTab === "all") return true
-    if (activeTab === "breaking") return update.isBreaking
-    return update.type === activeTab
-  })
+  const getCurrentUpdates = () => {
+    switch (activeTab) {
+      case "news":
+        return newsUpdates
+      case "apple":
+        return appleUpdates
+      case "breaking":
+        return [...newsUpdates, ...appleUpdates].filter((u) => u.isBreaking)
+      default:
+        return newsUpdates
+    }
+  }
+
+  const currentUpdates = getCurrentUpdates()
 
   return (
     <div className="min-h-screen relative overflow-hidden">
@@ -304,6 +405,11 @@ export default function WWDC25LiveTracker() {
                       <span className="flex items-center">
                         <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse mr-1"></span>
                         LIVE
+                      </span>
+                    ) : liveStatus?.minutesUntilKeynote && liveStatus.minutesUntilKeynote < 30 ? (
+                      <span className="flex items-center">
+                        <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse mr-1"></span>
+                        Starting soon
                       </span>
                     ) : (
                       "Sleek peek"
@@ -390,16 +496,36 @@ export default function WWDC25LiveTracker() {
         </header>
 
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* API Error Alert */}
+          {apiErrors.length > 0 && (
+            <Alert className="mb-6 bg-yellow-50/30 dark:bg-yellow-950/30 backdrop-blur-xl border-yellow-400/50">
+              <AlertCircle className="h-4 w-4 text-yellow-500" />
+              <AlertDescription className="text-gray-800 dark:text-white">
+                <strong>API Issues:</strong> {apiErrors.join(", ")}
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Keynote Status Alert */}
           {liveStatus && (
             <Alert
               className={`mb-6 bg-white/30 dark:bg-gray-900/30 backdrop-blur-xl border-white/20 dark:border-gray-700/20 ${
                 liveStatus.isLive
                   ? "border-red-400/50 bg-red-50/30 dark:bg-red-950/30"
-                  : "border-blue-400/50 bg-blue-50/30 dark:bg-blue-950/30"
+                  : liveStatus.minutesUntilKeynote && liveStatus.minutesUntilKeynote < 30
+                    ? "border-orange-400/50 bg-orange-50/30 dark:bg-orange-950/30"
+                    : "border-blue-400/50 bg-blue-50/30 dark:bg-blue-950/30"
               }`}
             >
-              <Clock className={`h-4 w-4 ${liveStatus.isLive ? "text-red-500" : "text-blue-500"}`} />
+              <Clock
+                className={`h-4 w-4 ${
+                  liveStatus.isLive
+                    ? "text-red-500"
+                    : liveStatus.minutesUntilKeynote && liveStatus.minutesUntilKeynote < 30
+                      ? "text-orange-500"
+                      : "text-blue-500"
+                }`}
+              />
               <AlertDescription className="text-lg font-medium text-gray-800 dark:text-white">
                 {getCountdownToKeynote()}
               </AlertDescription>
@@ -407,18 +533,23 @@ export default function WWDC25LiveTracker() {
           )}
 
           {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-8">
             {[
-              { title: "Total Updates", value: updates.length, desc: "News articles" },
+              { title: "News Updates", value: newsUpdates.length, desc: "Latest news" },
+              { title: "Apple Official", value: appleUpdates.length, desc: "Official notices" },
               {
                 title: "Breaking News",
-                value: updates.filter((u) => u.isBreaking).length,
-                desc: "Recent announcements",
+                value: [...newsUpdates, ...appleUpdates].filter((u) => u.isBreaking).length,
+                desc: "Today/Last hour",
               },
               {
                 title: "Last Updated",
                 value: lastUpdate.toLocaleTimeString("en-US"),
-                desc: liveStatus?.isLive ? "Every 30s" : "Every 2min",
+                desc: liveStatus?.isLive
+                  ? "Every 15s"
+                  : liveStatus?.minutesUntilKeynote && liveStatus.minutesUntilKeynote < 30
+                    ? "Every 30s"
+                    : "Every 2min",
               },
             ].map((stat, index) => (
               <Card
@@ -445,33 +576,40 @@ export default function WWDC25LiveTracker() {
             <CardHeader>
               <CardTitle className="flex items-center space-x-2 text-gray-800 dark:text-white">
                 <div
-                  className={`w-3 h-3 rounded-full ${liveStatus?.isLive ? "bg-red-500 animate-pulse" : "bg-green-500"}`}
+                  className={`w-3 h-3 rounded-full ${
+                    liveStatus?.isLive
+                      ? "bg-red-500 animate-pulse"
+                      : liveStatus?.minutesUntilKeynote && liveStatus.minutesUntilKeynote < 30
+                        ? "bg-orange-500 animate-pulse"
+                        : "bg-green-500"
+                  }`}
                 ></div>
                 <span>Live WWDC25 Feed</span>
               </CardTitle>
               <CardDescription className="text-gray-600 dark:text-gray-400">
-                Real-time updates from Apple's Worldwide Developers Conference 2025
+                Real-time updates from Apple's Worldwide Developers Conference 2025 • iOS 19/26 • macOS 15/16 • watchOS
+                11/12
               </CardDescription>
 
-              <Tabs defaultValue="all" className="mt-2" onValueChange={handleTabChange}>
-                <TabsList className="grid grid-cols-3 md:w-[300px] bg-white/20 dark:bg-gray-800/20 backdrop-blur-xl border-white/20 dark:border-gray-700/20">
+              <Tabs defaultValue="news" className="mt-2" onValueChange={handleTabChange}>
+                <TabsList className="grid grid-cols-3 md:w-[400px] bg-white/20 dark:bg-gray-800/20 backdrop-blur-xl border-white/20 dark:border-gray-700/20">
                   <TabsTrigger
-                    value="all"
+                    value="news"
                     className="data-[state=active]:bg-white/40 dark:data-[state=active]:bg-gray-700/40"
                   >
-                    All
+                    News & Updates
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="apple"
+                    className="data-[state=active]:bg-white/40 dark:data-[state=active]:bg-gray-700/40"
+                  >
+                    Apple Official
                   </TabsTrigger>
                   <TabsTrigger
                     value="breaking"
                     className="data-[state=active]:bg-white/40 dark:data-[state=active]:bg-gray-700/40"
                   >
                     Breaking
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="news"
-                    className="data-[state=active]:bg-white/40 dark:data-[state=active]:bg-gray-700/40"
-                  >
-                    News
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
@@ -500,8 +638,8 @@ export default function WWDC25LiveTracker() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {filteredUpdates.length > 0 ? (
-                    filteredUpdates.map((update, index) => (
+                  {currentUpdates.length > 0 ? (
+                    currentUpdates.map((update, index) => (
                       <div
                         key={update.id}
                         className={`bg-white/20 dark:bg-gray-800/20 backdrop-blur-xl rounded-lg p-4 border border-white/10 dark:border-gray-700/10 transition-all duration-300 hover:bg-white/30 dark:hover:bg-gray-800/30 hover:shadow-lg ${
@@ -516,7 +654,7 @@ export default function WWDC25LiveTracker() {
                                   update.isBreaking || update.type === "live" ? "animate-pulse" : ""
                                 }`}
                               >
-                                {update.type === "live" ? "LIVE" : update.type === "news" ? "NEWS" : "OFFICIAL"}
+                                {getTypeName(update.type)}
                               </Badge>
                               {update.isBreaking && (
                                 <Badge className="bg-gradient-to-r from-red-500 to-pink-500 text-white animate-pulse border-0">
@@ -557,7 +695,7 @@ export default function WWDC25LiveTracker() {
                   ) : (
                     <div className="text-center py-12 text-gray-600 dark:text-gray-400">
                       <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>No {activeTab === "all" ? "WWDC25" : activeTab} updates at the moment</p>
+                      <p>No {activeTab === "news" ? "news" : activeTab} updates at the moment</p>
                       <p className="text-sm">Updates will appear here when available</p>
                     </div>
                   )}
@@ -595,7 +733,9 @@ export default function WWDC25LiveTracker() {
               </div>
               <div className="text-center">
                 <p className="font-medium">WWDC25 Live Tracker • Real-time updates</p>
-                <p className="mt-1 text-xs">June 9-13, 2025 • A week of technology and creativity</p>
+                <p className="mt-1 text-xs">
+                  June 9-13, 2025 • iOS 19/26 • macOS 15/16 • watchOS 11/12 • tvOS 18/19 • visionOS 2/3
+                </p>
                 <p className="mt-2">
                   {isConnected ? (
                     <span className="flex items-center justify-center">
