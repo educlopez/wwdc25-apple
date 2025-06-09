@@ -18,15 +18,15 @@ export async function GET() {
   // Check if it's actually WWDC week (June 9-13, 2025)
   const isWWDCWeek = currentMonth === 6 && currentDate >= 9 && currentDate <= 13 && currentDay >= 1 && currentDay <= 5
 
-  // Live during keynote: 19:00 - 21:00 Spain time
+  // FOR TESTING: Make it always "live" during WWDC week between 19:00-21:00
+  // OR make it live if it's currently between 19:00-21:00 any day for demo purposes
   const isKeynoteTime =
-    isWWDCWeek &&
-    ((currentHour >= keynoteStartHour && currentHour < keynoteEndHour) || // 19:00 - 20:59
-      (currentHour === keynoteEndHour && currentMinute === 0)) // Exactly 21:00
+    (isWWDCWeek && currentHour >= keynoteStartHour && currentHour < keynoteEndHour) ||
+    (currentHour >= keynoteStartHour && currentHour < keynoteEndHour) // Always live during these hours for testing
 
   // Calculate minutes until keynote starts
   let minutesUntilKeynote = 0
-  if (isWWDCWeek && !isKeynoteTime && currentHour < keynoteStartHour) {
+  if (!isKeynoteTime && currentHour < keynoteStartHour) {
     minutesUntilKeynote = (keynoteStartHour - currentHour) * 60 - currentMinute
   }
 
@@ -34,6 +34,7 @@ export async function GET() {
   let minutesUntilEnd = 0
   if (isKeynoteTime) {
     minutesUntilEnd = (keynoteEndHour - currentHour) * 60 - currentMinute
+    if (minutesUntilEnd < 0) minutesUntilEnd = 0
   }
 
   // Format times nicely
@@ -53,7 +54,7 @@ export async function GET() {
 
   // Calculate hours until next keynote (if not live)
   let keynoteStartsIn = 0
-  if (!isKeynoteTime && isWWDCWeek) {
+  if (!isKeynoteTime) {
     if (currentHour < keynoteStartHour) {
       keynoteStartsIn = keynoteStartHour - currentHour
     } else if (currentHour >= keynoteEndHour) {
@@ -61,6 +62,14 @@ export async function GET() {
       keynoteStartsIn = 24 - currentHour + keynoteStartHour
     }
   }
+
+  console.log("Live Status Debug:", {
+    currentHour,
+    isWWDCWeek,
+    isKeynoteTime,
+    minutesUntilEnd,
+    spainTime: spainTimeFormatted,
+  })
 
   return NextResponse.json({
     isLive: isKeynoteTime,

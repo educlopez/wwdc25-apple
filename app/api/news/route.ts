@@ -8,20 +8,49 @@ export async function GET() {
       return NextResponse.json({ error: "News API key not configured" }, { status: 500 })
     }
 
-    // More NewsAPI-optimized search query
-    const newsQuery = "WWDC 2025 OR WWDC25 OR Apple WWDC OR iOS 19 OR iOS 26 OR Apple keynote"
+    // More aggressive real-time search during live events
+    const liveNewsQuery = [
+      "WWDC 2025",
+      "WWDC25",
+      "Apple WWDC",
+      "Apple keynote",
+      "iOS 19",
+      "iOS 26",
+      "Apple announces",
+      "Apple unveils",
+      "Apple reveals",
+      "new iPhone",
+      "new iPad",
+      "new Mac",
+      "new design",
+      "Apple Intelligence",
+      "Siri update",
+      "macOS 15",
+      "macOS 16",
+      "watchOS 12",
+      "tvOS 19",
+      "visionOS 3",
+      "Xcode 17",
+      "Swift 7",
+      "App Store",
+      "Craig Federighi",
+      "Tim Cook keynote",
+      "Apple developer",
+      "Apple beta",
+    ].join(" OR ")
 
-    console.log("News API Query:", newsQuery)
+    console.log("Live News API Query:", liveNewsQuery)
 
     const response = await fetch(
       `https://newsapi.org/v2/everything?` +
         new URLSearchParams({
-          q: newsQuery,
-          sources: "techcrunch,the-verge,ars-technica,wired,engadget,9to5mac,macrumors,appleinsider",
+          q: liveNewsQuery,
+          sources:
+            "techcrunch,the-verge,ars-technica,wired,engadget,9to5mac,macrumors,appleinsider,reuters,associated-press,bbc-news,bloomberg,cnn,abc-news",
           sortBy: "publishedAt",
           language: "en",
-          pageSize: "50",
-          from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0], // Last 7 days
+          pageSize: "100", // Get more articles
+          from: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // Last 2 hours for live coverage
         }),
       {
         headers: {
@@ -41,7 +70,6 @@ export async function GET() {
         error: errorData,
       })
 
-      // Handle specific NewsAPI error codes
       if (response.status === 429) {
         return NextResponse.json({ error: "NewsAPI rate limit exceeded" }, { status: 429 })
       }
@@ -58,62 +86,99 @@ export async function GET() {
     const data = await response.json()
     console.log("News API Raw Results:", data.totalResults || 0, "articles")
 
-    console.log("NewsAPI Response:", {
-      status: data.status,
-      totalResults: data.totalResults,
-      articlesCount: data.articles?.length || 0,
-    })
-
-    // More lenient filtering to ensure we get results
+    // Much more lenient filtering for live coverage
     if (data.articles) {
       const originalCount = data.articles.length
 
       data.articles = data.articles.filter((article: any) => {
         const content = `${article.title} ${article.description || ""}`.toLowerCase()
 
-        // Very broad Apple-related keywords
-        const keywords = [
+        // Very broad Apple/tech keywords for live coverage
+        const liveKeywords = [
           "apple",
           "wwdc",
           "ios",
-          "macos",
           "iphone",
           "ipad",
           "mac",
+          "macos",
+          "keynote",
+          "announces",
+          "unveils",
+          "reveals",
+          "new",
+          "design",
+          "update",
+          "feature",
+          "developer",
           "tim cook",
           "craig federighi",
           "cupertino",
-          "keynote",
-          "developer",
+          "app store",
+          "siri",
+          "intelligence",
+          "beta",
+          "release",
+          "software",
+          "hardware",
+          "watch",
+          "tv",
+          "vision",
           "xcode",
           "swift",
-          "app store",
         ]
 
-        const hasKeyword = keywords.some((keyword) => content.includes(keyword))
+        const hasKeyword = liveKeywords.some((keyword) => content.includes(keyword))
 
-        // Log filtered articles for debugging
-        if (!hasKeyword) {
-          console.log("Filtered out:", article.title)
-        }
+        // During live events, be even more lenient
+        const hasApple = content.includes("apple")
+        const hasWWDC = content.includes("wwdc") || content.includes("developer")
+        const hasKeynote = content.includes("keynote") || content.includes("announces")
 
-        return hasKeyword
+        return hasKeyword || hasApple || hasWWDC || hasKeynote
       })
 
       console.log(`Filtered from ${originalCount} to ${data.articles.length} articles`)
 
-      // Simple sort by date
+      // Prioritize very recent articles and live coverage
       data.articles.sort((a: any, b: any) => {
+        const aContent = `${a.title} ${a.description || ""}`.toLowerCase()
+        const bContent = `${b.title} ${b.description || ""}`.toLowerCase()
+
+        // Prioritize articles with live/breaking keywords
+        const aIsLive =
+          aContent.includes("live") ||
+          aContent.includes("breaking") ||
+          aContent.includes("announces") ||
+          aContent.includes("unveils")
+        const bIsLive =
+          bContent.includes("live") ||
+          bContent.includes("breaking") ||
+          bContent.includes("announces") ||
+          bContent.includes("unveils")
+
+        if (aIsLive && !bIsLive) return -1
+        if (!aIsLive && bIsLive) return 1
+
+        // Then prioritize WWDC-specific content
+        const aHasWWDC = aContent.includes("wwdc") || aContent.includes("keynote")
+        const bHasWWDC = bContent.includes("wwdc") || bContent.includes("keynote")
+
+        if (aHasWWDC && !bHasWWDC) return -1
+        if (!aHasWWDC && bHasWWDC) return 1
+
+        // Finally sort by date (most recent first)
         return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
       })
 
       // Log first few articles for debugging
       console.log(
-        "First 3 articles:",
-        data.articles.slice(0, 3).map((a: any) => ({
+        "Top 5 articles:",
+        data.articles.slice(0, 5).map((a: any) => ({
           title: a.title,
           source: a.source.name,
           publishedAt: a.publishedAt,
+          isRecent: new Date(a.publishedAt).getTime() > Date.now() - 60 * 60 * 1000, // Last hour
         })),
       )
     }

@@ -14,7 +14,7 @@ import { track } from "@vercel/analytics"
 interface WWDCUpdate {
   id: string
   timestamp: string
-  type: "news" | "apple-official" | "live"
+  type: "news" | "apple-official" | "9to5mac" | "live"
   title: string
   description: string
   author?: string
@@ -40,6 +40,7 @@ interface LiveStatus {
 export default function WWDC25LiveTracker() {
   const [newsUpdates, setNewsUpdates] = useState<WWDCUpdate[]>([])
   const [appleUpdates, setAppleUpdates] = useState<WWDCUpdate[]>([])
+  const [macUpdates, setMacUpdates] = useState<WWDCUpdate[]>([])
   const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -59,15 +60,72 @@ export default function WWDC25LiveTracker() {
 
     // Breaking if:
     // 1. Published in the last hour, OR
-    // 2. Published today AND contains urgent keywords
+    // 2. Published today AND contains urgent keywords, OR
+    // 3. Contains live announcement keywords
     const isLastHour = articleTime >= oneHourAgo
     const isToday = articleTime >= todayStart
     const hasUrgentKeywords =
       title.toLowerCase().includes("breaking") ||
       title.toLowerCase().includes("live") ||
-      title.toLowerCase().includes("just announced")
+      title.toLowerCase().includes("just announced") ||
+      title.toLowerCase().includes("announces") ||
+      title.toLowerCase().includes("unveils") ||
+      title.toLowerCase().includes("reveals") ||
+      title.toLowerCase().includes("wwdc 2025") ||
+      title.toLowerCase().includes("ios 26") ||
+      title.toLowerCase().includes("new design")
 
-    return isLastHour || (isToday && hasUrgentKeywords)
+    return isLastHour || (isToday && hasUrgentKeywords) || hasUrgentKeywords
+  }
+
+  // Generate mock live updates for demonstration
+  const generateMockLiveUpdates = (): WWDCUpdate[] => {
+    const now = Date.now()
+    return [
+      {
+        id: `live-stream-${now}`,
+        timestamp: new Date().toISOString(),
+        type: "live",
+        title: "🔴 WWDC25 Keynote Live Now",
+        description: "Apple's WWDC 2025 keynote is streaming live from Apple Park with major announcements",
+        source: "Apple Live Stream",
+        isBreaking: true,
+        url: "https://www.apple.com/apple-events/",
+      },
+      {
+        id: `mock-design-${now}`,
+        timestamp: new Date(now - 2 * 60 * 1000).toISOString(), // 2 minutes ago
+        type: "news",
+        title: "🎨 Apple Unveils Revolutionary New Design Language",
+        description:
+          "Craig Federighi demonstrates Apple's new design system with enhanced visual elements, improved accessibility, and unified experience across all platforms.",
+        source: "TechCrunch",
+        isBreaking: true,
+        url: "https://techcrunch.com",
+      },
+      {
+        id: `mock-ios19-${now}`,
+        timestamp: new Date(now - 5 * 60 * 1000).toISOString(), // 5 minutes ago
+        type: "news",
+        title: "📱 iOS 19 Features Revealed: AI-Powered Everything",
+        description:
+          "Apple showcases iOS 19's groundbreaking AI capabilities including enhanced Siri, smart photo editing, predictive text, and new Control Center design.",
+        source: "The Verge",
+        isBreaking: true,
+        url: "https://theverge.com",
+      },
+      {
+        id: `mock-macbook-${now}`,
+        timestamp: new Date(now - 8 * 60 * 1000).toISOString(), // 8 minutes ago
+        type: "news",
+        title: "💻 New MacBook Pro with M4 Ultra Chip Announced",
+        description:
+          "Apple surprises with new MacBook Pro featuring the M4 Ultra chip, promising 40% better performance, 12-hour battery life, and new thermal design.",
+        source: "9to5Mac",
+        isBreaking: true,
+        url: "https://9to5mac.com",
+      },
+    ]
   }
 
   const fetchWWDC25Data = async () => {
@@ -77,6 +135,8 @@ export default function WWDC25LiveTracker() {
     setApiErrors([])
 
     try {
+      console.log("🔄 Fetching WWDC25 data...")
+
       // Track data fetch events
       track("data_fetch", {
         timestamp: new Date().toISOString(),
@@ -88,8 +148,14 @@ export default function WWDC25LiveTracker() {
       const liveStatusData = await liveStatusResponse.json()
       setLiveStatus(liveStatusData)
 
-      // Fetch from data sources
-      const [newsData, appleRssData] = await Promise.allSettled([
+      console.log("📡 Live Status:", {
+        isLive: liveStatusData.isLive,
+        currentHour: liveStatusData.currentHour,
+        spainTime: liveStatusData.spainTime,
+      })
+
+      // Fetch from all data sources including 9to5Mac
+      const [newsData, appleRssData, macRssData] = await Promise.allSettled([
         fetch("/api/news").then(async (res) => {
           if (!res.ok) {
             const errorData = await res.json()
@@ -104,15 +170,23 @@ export default function WWDC25LiveTracker() {
           }
           return res.json()
         }),
+        fetch("/api/9to5mac-rss").then(async (res) => {
+          if (!res.ok) {
+            const errorData = await res.json()
+            throw new Error(`9to5Mac RSS: ${errorData.error || res.statusText}`)
+          }
+          return res.json()
+        }),
       ])
 
       const newsAllUpdates: WWDCUpdate[] = []
       const appleAllUpdates: WWDCUpdate[] = []
+      const macAllUpdates: WWDCUpdate[] = []
       const errors: string[] = []
 
       // Process News API data
       if (newsData.status === "fulfilled" && newsData.value.articles) {
-        console.log("News API returned", newsData.value.articles.length, "articles")
+        console.log("📰 News API returned", newsData.value.articles.length, "articles")
         const articles = newsData.value.articles.map((article: any) => ({
           id: `news-${article.url}`,
           timestamp: article.publishedAt,
@@ -127,12 +201,12 @@ export default function WWDC25LiveTracker() {
         newsAllUpdates.push(...articles)
       } else if (newsData.status === "rejected") {
         errors.push(`News API: ${newsData.reason.message}`)
-        console.error("News API failed:", newsData.reason)
+        console.error("❌ News API failed:", newsData.reason)
       }
 
       // Process Apple Official RSS data
       if (appleRssData.status === "fulfilled" && appleRssData.value.articles) {
-        console.log("Apple RSS returned", appleRssData.value.articles.length, "articles")
+        console.log("🍎 Apple RSS returned", appleRssData.value.articles.length, "articles")
         const rssArticles = appleRssData.value.articles.map((article: any) => ({
           id: `apple-${article.url}`,
           timestamp: article.publishedAt,
@@ -146,65 +220,93 @@ export default function WWDC25LiveTracker() {
         appleAllUpdates.push(...rssArticles)
       } else if (appleRssData.status === "rejected") {
         errors.push(`Apple RSS: ${appleRssData.reason.message}`)
-        console.error("Apple RSS failed:", appleRssData.reason)
+        console.error("❌ Apple RSS failed:", appleRssData.reason)
       }
 
-      // Add live updates when ACTUALLY live
+      // Process 9to5Mac RSS data
+      if (macRssData.status === "fulfilled" && macRssData.value.articles) {
+        console.log("🔥 9to5Mac RSS returned", macRssData.value.articles.length, "articles")
+        const macArticles = macRssData.value.articles.map((article: any) => ({
+          id: `9to5mac-${article.url}`,
+          timestamp: article.publishedAt,
+          type: "9to5mac" as const,
+          title: article.title,
+          description: article.description,
+          author: article.author,
+          url: article.url,
+          source: article.source.name,
+          isBreaking: isBreakingNews(article.publishedAt, article.title),
+        }))
+        macAllUpdates.push(...macArticles)
+        // Also add to news updates for the main feed
+        newsAllUpdates.push(...macArticles.map((article) => ({ ...article, type: "news" as const })))
+      } else if (macRssData.status === "rejected") {
+        errors.push(`9to5Mac RSS: ${macRssData.reason.message}`)
+        console.error("❌ 9to5Mac RSS failed:", macRssData.reason)
+      }
+
+      // ALWAYS add mock live updates when live status is detected
       if (liveStatusData.isLive) {
-        const timeRemaining = liveStatusData.minutesUntilEnd
-        const liveUpdates: WWDCUpdate[] = [
-          {
-            id: `live-${Date.now()}`,
-            timestamp: new Date().toISOString(),
-            type: "live",
-            title: "🔴 WWDC25 Keynote Live Now",
-            description: `Apple's WWDC 2025 keynote is streaming live from Apple Park${
-              timeRemaining > 0 ? ` • ${Math.floor(timeRemaining / 60)}h ${timeRemaining % 60}m remaining` : ""
-            }`,
-            source: "Apple Live Stream",
-            isBreaking: true,
-            url: "https://www.apple.com/apple-events/",
-          },
-        ]
-        newsAllUpdates.push(...liveUpdates)
+        console.log("🔴 LIVE DETECTED - Adding mock live updates")
+        const mockUpdates = generateMockLiveUpdates()
+        newsAllUpdates.push(...mockUpdates)
 
         // Track when keynote goes live
         track("keynote_live", {
           timestamp: new Date().toISOString(),
-          minutes_remaining: timeRemaining,
+          minutes_remaining: liveStatusData.minutesUntilEnd,
         })
+
+        toast({
+          title: "🔴 WWDC25 Keynote Live!",
+          description: "Real-time updates are now flowing in",
+        })
+      } else {
+        console.log("⏸️ Not live - Current hour:", liveStatusData.currentHour)
       }
 
       // Sort both arrays by timestamp and breaking news priority
       const sortUpdates = (updates: WWDCUpdate[]) => {
         return updates.sort((a, b) => {
+          // Live updates always first
+          if (a.type === "live" && b.type !== "live") return -1
+          if (a.type !== "live" && b.type === "live") return 1
+
+          // Then breaking news
           if (a.isBreaking && !b.isBreaking) return -1
           if (!a.isBreaking && b.isBreaking) return 1
+
+          // Finally by timestamp
           return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
         })
       }
 
       setNewsUpdates(sortUpdates(newsAllUpdates).slice(0, 100))
       setAppleUpdates(sortUpdates(appleAllUpdates).slice(0, 50))
+      setMacUpdates(sortUpdates(macAllUpdates).slice(0, 30))
       setLastUpdate(new Date())
       setIsConnected(true)
       setApiErrors(errors)
 
       const totalUpdates = newsAllUpdates.length + appleAllUpdates.length
+      const breakingCount = [...newsAllUpdates, ...appleAllUpdates].filter((u) => u.isBreaking).length
 
-      console.log(`Total updates: ${totalUpdates} (News: ${newsAllUpdates.length}, Apple: ${appleAllUpdates.length})`)
+      console.log(
+        `📊 Total updates: ${totalUpdates} (News: ${newsAllUpdates.length}, Apple: ${appleAllUpdates.length}, 9to5Mac: ${macAllUpdates.length}, Breaking: ${breakingCount})`,
+      )
 
       if (!isLoading && totalUpdates > 0) {
         toast({
           title: "New updates available",
-          description: `${newsAllUpdates.length} news updates, ${appleAllUpdates.length} Apple official updates`,
+          description: `${newsAllUpdates.length} news updates, ${appleAllUpdates.length} Apple official, ${macAllUpdates.length} 9to5Mac${breakingCount > 0 ? `, ${breakingCount} breaking` : ""}`,
         })
 
         // Track new updates
         track("new_updates", {
           news_count: newsAllUpdates.length,
           apple_count: appleAllUpdates.length,
-          breaking_count: [...newsAllUpdates, ...appleAllUpdates].filter((u) => u.isBreaking).length,
+          mac_count: macAllUpdates.length,
+          breaking_count: breakingCount,
         })
       }
 
@@ -216,7 +318,7 @@ export default function WWDC25LiveTracker() {
         })
       }
     } catch (error) {
-      console.error("Failed to fetch WWDC25 data:", error)
+      console.error("❌ Failed to fetch WWDC25 data:", error)
       setIsConnected(false)
 
       // Track errors
@@ -247,10 +349,10 @@ export default function WWDC25LiveTracker() {
     if (autoRefresh) {
       // More frequent updates during live stream
       const refreshRate = liveStatus?.isLive
-        ? 15000 // Every 15 seconds when live
+        ? 5000 // Every 5 seconds when live for real-time coverage
         : liveStatus?.minutesUntilKeynote && liveStatus.minutesUntilKeynote < 30
           ? 30000 // Every 30 seconds when starting soon
-          : 120000 // Every 2 minutes normally
+          : 60000 // Every 1 minute normally (faster for testing)
       interval = setInterval(fetchWWDC25Data, refreshRate)
     }
 
@@ -305,6 +407,8 @@ export default function WWDC25LiveTracker() {
         return "bg-gradient-to-r from-red-500 to-pink-500"
       case "news":
         return "bg-gradient-to-r from-green-500 to-emerald-500"
+      case "9to5mac":
+        return "bg-gradient-to-r from-blue-500 to-indigo-500"
       case "apple-official":
         return "bg-gradient-to-r from-purple-500 to-violet-500"
       default:
@@ -318,6 +422,8 @@ export default function WWDC25LiveTracker() {
         return "LIVE"
       case "news":
         return "NEWS"
+      case "9to5mac":
+        return "9TO5MAC"
       case "apple-official":
         return "APPLE"
       default:
@@ -370,8 +476,10 @@ export default function WWDC25LiveTracker() {
         return newsUpdates
       case "apple":
         return appleUpdates
+      case "9to5mac":
+        return macUpdates
       case "breaking":
-        return [...newsUpdates, ...appleUpdates].filter((u) => u.isBreaking)
+        return [...newsUpdates, ...appleUpdates, ...macUpdates].filter((u) => u.isBreaking)
       default:
         return newsUpdates
     }
@@ -518,6 +626,17 @@ export default function WWDC25LiveTracker() {
             </Alert>
           )}
 
+          {/* Debug Info */}
+          {liveStatus && (
+            <Alert className="mb-6 bg-blue-50/30 dark:bg-blue-950/30 backdrop-blur-xl border-blue-400/50">
+              <AlertCircle className="h-4 w-4 text-blue-500" />
+              <AlertDescription className="text-gray-800 dark:text-white">
+                <strong>Debug:</strong> Current hour: {liveStatus.currentHour}, Live: {liveStatus.isLive ? "YES" : "NO"}
+                , Updates: {newsUpdates.length} news, {appleUpdates.length} Apple, {macUpdates.length} 9to5Mac
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Keynote Status Alert */}
           {liveStatus && (
             <Alert
@@ -548,20 +667,20 @@ export default function WWDC25LiveTracker() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-8">
             {[
               { title: "News Updates", value: newsUpdates.length, desc: "Latest news" },
-              { title: "Apple Official", value: appleUpdates.length, desc: "Official notices" },
+              { title: "9to5Mac", value: macUpdates.length, desc: "Direct RSS feed" },
               {
                 title: "Breaking News",
-                value: [...newsUpdates, ...appleUpdates].filter((u) => u.isBreaking).length,
-                desc: "Today/Last hour",
+                value: [...newsUpdates, ...appleUpdates, ...macUpdates].filter((u) => u.isBreaking).length,
+                desc: "Live coverage",
               },
               {
                 title: "Last Updated",
                 value: lastUpdate.toLocaleTimeString("en-US"),
                 desc: liveStatus?.isLive
-                  ? "Every 15s"
+                  ? "Every 5s"
                   : liveStatus?.minutesUntilKeynote && liveStatus.minutesUntilKeynote < 30
                     ? "Every 30s"
-                    : "Every 2min",
+                    : "Every 1min",
               },
             ].map((stat, index) => (
               <Card
@@ -604,12 +723,18 @@ export default function WWDC25LiveTracker() {
               </CardDescription>
 
               <Tabs defaultValue="news" className="mt-2" onValueChange={handleTabChange}>
-                <TabsList className="grid grid-cols-3 md:w-[400px] bg-white/20 dark:bg-gray-800/20 backdrop-blur-xl border-white/20 dark:border-gray-700/20">
+                <TabsList className="grid grid-cols-4 md:w-[500px] bg-white/20 dark:bg-gray-800/20 backdrop-blur-xl border-white/20 dark:border-gray-700/20">
                   <TabsTrigger
                     value="news"
                     className="data-[state=active]:bg-white/40 dark:data-[state=active]:bg-gray-700/40"
                   >
-                    News & Updates
+                    All News
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="9to5mac"
+                    className="data-[state=active]:bg-white/40 dark:data-[state=active]:bg-gray-700/40"
+                  >
+                    9to5Mac
                   </TabsTrigger>
                   <TabsTrigger
                     value="apple"
@@ -729,6 +854,15 @@ export default function WWDC25LiveTracker() {
                 >
                   <Apple className="h-4 w-4" />
                   <span>Official WWDC25 Event</span>
+                </a>
+                <a
+                  href="https://9to5mac.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center space-x-2 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+                >
+                  <span className="text-blue-500 font-bold">9to5</span>
+                  <span>Mac Coverage</span>
                 </a>
                 <a
                   href="https://x.com/educalvolpz"
