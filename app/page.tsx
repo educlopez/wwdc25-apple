@@ -30,9 +30,11 @@ interface LiveStatus {
   keynoteStartsIn: number
   currentHour: number
   keynoteHour: number
+  keynoteEndHour: number
   isWWDCWeek: boolean
   currentDate: string
   minutesUntilKeynote: number
+  minutesUntilEnd: number
 }
 
 export default function WWDC25LiveTracker() {
@@ -86,7 +88,7 @@ export default function WWDC25LiveTracker() {
       const liveStatusData = await liveStatusResponse.json()
       setLiveStatus(liveStatusData)
 
-      // Fetch from data sources (removed YouTube API)
+      // Fetch from data sources
       const [newsData, appleRssData] = await Promise.allSettled([
         fetch("/api/news").then(async (res) => {
           if (!res.ok) {
@@ -149,13 +151,16 @@ export default function WWDC25LiveTracker() {
 
       // Add live updates when ACTUALLY live
       if (liveStatusData.isLive) {
+        const timeRemaining = liveStatusData.minutesUntilEnd
         const liveUpdates: WWDCUpdate[] = [
           {
             id: `live-${Date.now()}`,
             timestamp: new Date().toISOString(),
             type: "live",
             title: "🔴 WWDC25 Keynote Live Now",
-            description: "Apple's WWDC 2025 keynote is currently streaming live from Apple Park",
+            description: `Apple's WWDC 2025 keynote is streaming live from Apple Park${
+              timeRemaining > 0 ? ` • ${Math.floor(timeRemaining / 60)}h ${timeRemaining % 60}m remaining` : ""
+            }`,
             source: "Apple Live Stream",
             isBreaking: true,
             url: "https://www.apple.com/apple-events/",
@@ -166,6 +171,7 @@ export default function WWDC25LiveTracker() {
         // Track when keynote goes live
         track("keynote_live", {
           timestamp: new Date().toISOString(),
+          minutes_remaining: timeRemaining,
         })
       }
 
@@ -239,12 +245,12 @@ export default function WWDC25LiveTracker() {
 
     let interval: NodeJS.Timeout
     if (autoRefresh) {
-      // More frequent updates as we approach keynote time
+      // More frequent updates during live stream
       const refreshRate = liveStatus?.isLive
-        ? 15000
+        ? 15000 // Every 15 seconds when live
         : liveStatus?.minutesUntilKeynote && liveStatus.minutesUntilKeynote < 30
-          ? 30000
-          : 120000
+          ? 30000 // Every 30 seconds when starting soon
+          : 120000 // Every 2 minutes normally
       interval = setInterval(fetchWWDC25Data, refreshRate)
     }
 
@@ -334,6 +340,12 @@ export default function WWDC25LiveTracker() {
     if (!liveStatus) return null
 
     if (liveStatus.isLive) {
+      const timeRemaining = liveStatus.minutesUntilEnd
+      if (timeRemaining > 0) {
+        const hours = Math.floor(timeRemaining / 60)
+        const minutes = timeRemaining % 60
+        return `🔴 KEYNOTE LIVE • ${hours}h ${minutes}m remaining (until 21:00)`
+      }
       return "🔴 KEYNOTE LIVE NOW"
     }
 
@@ -346,10 +358,10 @@ export default function WWDC25LiveTracker() {
     }
 
     if (liveStatus.keynoteStartsIn > 0) {
-      return `⏰ Keynote starts in ${liveStatus.keynoteStartsIn} hours (19:00 Spain)`
+      return `⏰ Keynote starts in ${liveStatus.keynoteStartsIn} hours (19:00-21:00 Spain)`
     }
 
-    return "✅ Today's sessions completed"
+    return "✅ Today's keynote completed (19:00-21:00)"
   }
 
   const getCurrentUpdates = () => {
@@ -587,8 +599,8 @@ export default function WWDC25LiveTracker() {
                 <span>Live WWDC25 Feed</span>
               </CardTitle>
               <CardDescription className="text-gray-600 dark:text-gray-400">
-                Real-time updates from Apple's Worldwide Developers Conference 2025 • iOS 19/26 • macOS 15/16 • watchOS
-                11/12
+                Real-time updates from Apple's Worldwide Developers Conference 2025 • Keynote: 19:00-21:00 Spain • iOS
+                19/26 • macOS 15/16
               </CardDescription>
 
               <Tabs defaultValue="news" className="mt-2" onValueChange={handleTabChange}>
@@ -734,7 +746,7 @@ export default function WWDC25LiveTracker() {
               <div className="text-center">
                 <p className="font-medium">WWDC25 Live Tracker • Real-time updates</p>
                 <p className="mt-1 text-xs">
-                  June 9-13, 2025 • iOS 19/26 • macOS 15/16 • watchOS 11/12 • tvOS 18/19 • visionOS 2/3
+                  June 9-13, 2025 • Keynote: 19:00-21:00 Spain • iOS 19/26 • macOS 15/16 • watchOS 11/12
                 </p>
                 <p className="mt-2">
                   {isConnected ? (

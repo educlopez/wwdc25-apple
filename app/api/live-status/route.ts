@@ -6,8 +6,9 @@ export async function GET() {
   const pacificTime = new Date(now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }))
 
   // WWDC25 actual dates: June 9-13, 2025
-  // Keynote starts at 19:00 Spain time (10:00 AM Pacific)
-  const keynoteHour = 19 // 7 PM Spain time
+  // Keynote: 19:00 - 21:00 Spain time (10:00 AM - 12:00 PM Pacific)
+  const keynoteStartHour = 19 // 7 PM Spain time
+  const keynoteEndHour = 21 // 9 PM Spain time
   const currentHour = spainTime.getHours()
   const currentMinute = spainTime.getMinutes()
   const currentDay = spainTime.getDay() // 0 = Sunday, 1 = Monday, etc.
@@ -17,22 +18,22 @@ export async function GET() {
   // Check if it's actually WWDC week (June 9-13, 2025)
   const isWWDCWeek = currentMonth === 6 && currentDate >= 9 && currentDate <= 13 && currentDay >= 1 && currentDay <= 5
 
-  // Only consider "live" during actual keynote hours on WWDC days
+  // Live during keynote: 19:00 - 21:00 Spain time
   const isKeynoteTime =
     isWWDCWeek &&
-    ((currentHour === keynoteHour && currentMinute >= 0) || // 7:00 PM - 7:59 PM
-      currentHour === keynoteHour + 1 || // 8:00 PM - 8:59 PM
-      currentHour === keynoteHour + 2 || // 9:00 PM - 9:59 PM
-      (currentHour === keynoteHour + 3 && currentMinute <= 30)) // 10:00 PM - 10:30 PM
+    ((currentHour >= keynoteStartHour && currentHour < keynoteEndHour) || // 19:00 - 20:59
+      (currentHour === keynoteEndHour && currentMinute === 0)) // Exactly 21:00
 
-  // Calculate minutes until keynote
+  // Calculate minutes until keynote starts
   let minutesUntilKeynote = 0
-  if (isWWDCWeek && !isKeynoteTime) {
-    if (currentHour < keynoteHour) {
-      minutesUntilKeynote = (keynoteHour - currentHour) * 60 - currentMinute
-    } else if (currentHour === keynoteHour - 1) {
-      minutesUntilKeynote = 60 - currentMinute
-    }
+  if (isWWDCWeek && !isKeynoteTime && currentHour < keynoteStartHour) {
+    minutesUntilKeynote = (keynoteStartHour - currentHour) * 60 - currentMinute
+  }
+
+  // Calculate minutes until keynote ends (if currently live)
+  let minutesUntilEnd = 0
+  if (isKeynoteTime) {
+    minutesUntilEnd = (keynoteEndHour - currentHour) * 60 - currentMinute
   }
 
   // Format times nicely
@@ -53,11 +54,11 @@ export async function GET() {
   // Calculate hours until next keynote (if not live)
   let keynoteStartsIn = 0
   if (!isKeynoteTime && isWWDCWeek) {
-    if (currentHour < keynoteHour) {
-      keynoteStartsIn = keynoteHour - currentHour
-    } else {
+    if (currentHour < keynoteStartHour) {
+      keynoteStartsIn = keynoteStartHour - currentHour
+    } else if (currentHour >= keynoteEndHour) {
       // Next day keynote
-      keynoteStartsIn = 24 - currentHour + keynoteHour
+      keynoteStartsIn = 24 - currentHour + keynoteStartHour
     }
   }
 
@@ -67,9 +68,11 @@ export async function GET() {
     pacificTime: pacificTimeFormatted,
     keynoteStartsIn,
     currentHour,
-    keynoteHour,
+    keynoteHour: keynoteStartHour,
+    keynoteEndHour,
     isWWDCWeek,
     currentDate: `${currentMonth}/${currentDate}`,
     minutesUntilKeynote,
+    minutesUntilEnd,
   })
 }
