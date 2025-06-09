@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
+import { track } from "@vercel/analytics"
 
 interface WWDCUpdate {
   id: string
@@ -47,6 +48,12 @@ export default function WWDC25LiveTracker() {
 
     setIsRefreshing(true)
     try {
+      // Track data fetch events
+      track("data_fetch", {
+        timestamp: new Date().toISOString(),
+        is_live: liveStatus?.isLive || false,
+      })
+
       // Fetch live status first
       const liveStatusResponse = await fetch("/api/live-status")
       const liveStatusData = await liveStatusResponse.json()
@@ -106,6 +113,11 @@ export default function WWDC25LiveTracker() {
           },
         ]
         allUpdates.push(...liveUpdates)
+
+        // Track when keynote goes live
+        track("keynote_live", {
+          timestamp: new Date().toISOString(),
+        })
       }
 
       // Sort by timestamp and breaking news priority
@@ -124,10 +136,21 @@ export default function WWDC25LiveTracker() {
           title: "New updates available",
           description: `${allUpdates.length} WWDC25 updates loaded`,
         })
+
+        // Track new updates
+        track("new_updates", {
+          count: allUpdates.length,
+          breaking_count: allUpdates.filter((u) => u.isBreaking).length,
+        })
       }
     } catch (error) {
       console.error("Failed to fetch WWDC25 data:", error)
       setIsConnected(false)
+
+      // Track errors
+      track("fetch_error", {
+        error: error instanceof Error ? error.message : "Unknown error",
+      })
 
       toast({
         title: "Connection error",
@@ -141,6 +164,11 @@ export default function WWDC25LiveTracker() {
   }
 
   useEffect(() => {
+    // Track page load
+    track("page_load", {
+      timestamp: new Date().toISOString(),
+    })
+
     fetchWWDC25Data()
 
     let interval: NodeJS.Timeout
@@ -153,6 +181,44 @@ export default function WWDC25LiveTracker() {
       if (interval) clearInterval(interval)
     }
   }, [autoRefresh, liveStatus?.isLive])
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value)
+    track("tab_change", { tab: value })
+  }
+
+  const handleAutoRefreshToggle = () => {
+    const newValue = !autoRefresh
+    setAutoRefresh(newValue)
+    track("auto_refresh_toggle", { enabled: newValue })
+  }
+
+  const handleManualRefresh = () => {
+    track("manual_refresh")
+    fetchWWDC25Data()
+  }
+
+  const handleAppleEventClick = () => {
+    track("apple_event_click", {
+      timestamp: new Date().toISOString(),
+      is_live: liveStatus?.isLive || false,
+    })
+  }
+
+  const handleTwitterClick = () => {
+    track("twitter_click", {
+      timestamp: new Date().toISOString(),
+    })
+  }
+
+  const handleNewsClick = (update: WWDCUpdate) => {
+    track("news_click", {
+      source: update.source,
+      type: update.type,
+      is_breaking: update.isBreaking || false,
+      timestamp: new Date().toISOString(),
+    })
+  }
 
   const getTypeColor = (type: string, isBreaking?: boolean) => {
     if (isBreaking) return "bg-gradient-to-r from-red-500 to-pink-500"
@@ -266,6 +332,7 @@ export default function WWDC25LiveTracker() {
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center space-x-1"
+                      onClick={handleAppleEventClick}
                     >
                       <Apple className="h-3 w-3" />
                       <span>Watch Live</span>
@@ -282,6 +349,7 @@ export default function WWDC25LiveTracker() {
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center space-x-1"
+                      onClick={handleTwitterClick}
                     >
                       <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
@@ -297,7 +365,7 @@ export default function WWDC25LiveTracker() {
                     <WifiOff className="h-4 w-4 text-red-500" />
                   )}
                   <Button
-                    onClick={() => setAutoRefresh(!autoRefresh)}
+                    onClick={handleAutoRefreshToggle}
                     variant="outline"
                     size="sm"
                     className="bg-white/20 dark:bg-gray-800/20 backdrop-blur-xl border-white/20 dark:border-gray-700/20 hover:bg-white/30 dark:hover:bg-gray-800/30"
@@ -306,7 +374,7 @@ export default function WWDC25LiveTracker() {
                     <span className="hidden md:inline ml-1">{autoRefresh ? "Pause" : "Resume"}</span>
                   </Button>
                   <Button
-                    onClick={fetchWWDC25Data}
+                    onClick={handleManualRefresh}
                     variant="outline"
                     size="sm"
                     disabled={isRefreshing}
@@ -385,7 +453,7 @@ export default function WWDC25LiveTracker() {
                 Real-time updates from Apple's Worldwide Developers Conference 2025
               </CardDescription>
 
-              <Tabs defaultValue="all" className="mt-2" onValueChange={setActiveTab}>
+              <Tabs defaultValue="all" className="mt-2" onValueChange={handleTabChange}>
                 <TabsList className="grid grid-cols-3 md:w-[300px] bg-white/20 dark:bg-gray-800/20 backdrop-blur-xl border-white/20 dark:border-gray-700/20">
                   <TabsTrigger
                     value="all"
@@ -473,7 +541,12 @@ export default function WWDC25LiveTracker() {
                               asChild
                               className="ml-2 shrink-0 hover:bg-white/20 dark:hover:bg-gray-700/20"
                             >
-                              <a href={update.url} target="_blank" rel="noopener noreferrer">
+                              <a
+                                href={update.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={() => handleNewsClick(update)}
+                              >
                                 <ExternalLink className="h-4 w-4" />
                               </a>
                             </Button>
@@ -502,6 +575,7 @@ export default function WWDC25LiveTracker() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center space-x-2 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+                  onClick={handleAppleEventClick}
                 >
                   <Apple className="h-4 w-4" />
                   <span>Official WWDC25 Event</span>
@@ -511,6 +585,7 @@ export default function WWDC25LiveTracker() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center space-x-2 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+                  onClick={handleTwitterClick}
                 >
                   <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
