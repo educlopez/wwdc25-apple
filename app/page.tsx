@@ -254,6 +254,42 @@ export default function WWDC25LiveTracker() {
                     California: {liveStatus?.pacificTime || "--:--"}
                   </div>
                 </div>
+                <div className="flex items-center space-x-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    asChild
+                    className="bg-white/20 dark:bg-gray-800/20 backdrop-blur-xl border-white/20 dark:border-gray-700/20 hover:bg-white/30 dark:hover:bg-gray-800/30 hidden md:flex"
+                  >
+                    <a
+                      href="https://www.apple.com/apple-events/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center space-x-1"
+                    >
+                      <Apple className="h-3 w-3" />
+                      <span>Watch Live</span>
+                    </a>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    asChild
+                    className="bg-white/20 dark:bg-gray-800/20 backdrop-blur-xl border-white/20 dark:border-gray-700/20 hover:bg-white/30 dark:hover:bg-gray-800/30"
+                  >
+                    <a
+                      href="https://x.com/educalvolpz"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center space-x-1"
+                    >
+                      <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                      </svg>
+                      <span className="hidden md:inline">@educalvolpz</span>
+                    </a>
+                  </Button>
+                </div>
                 <div className="flex items-center space-x-2">
                   {isConnected ? (
                     <Wifi className="h-4 w-4 text-green-500" />
@@ -459,19 +495,45 @@ export default function WWDC25LiveTracker() {
 
           {/* Footer */}
           <footer className="mt-12 text-center text-sm text-gray-600 dark:text-gray-400 pb-8">
-            <p className="font-medium">WWDC25 Live Tracker • Real-time updates</p>
-            <p className="mt-1 text-xs">June 9-13, 2025 • A week of technology and creativity</p>
-            <p className="mt-2">
-              {isConnected ? (
-                <span className="flex items-center justify-center">
-                  <Wifi className="h-3 w-3 mr-1 text-green-500" /> Connected
-                </span>
-              ) : (
-                <span className="flex items-center justify-center">
-                  <WifiOff className="h-3 w-3 mr-1 text-red-500" /> Disconnected
-                </span>
-              )}
-            </p>
+            <div className="flex flex-col items-center space-y-4">
+              <div className="flex items-center space-x-6">
+                <a
+                  href="https://www.apple.com/apple-events/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center space-x-2 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+                >
+                  <Apple className="h-4 w-4" />
+                  <span>Official WWDC25 Event</span>
+                </a>
+                <a
+                  href="https://x.com/educalvolpz"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center space-x-2 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+                >
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                  </svg>
+                  <span>Follow @educalvolpz</span>
+                </a>
+              </div>
+              <div className="text-center">
+                <p className="font-medium">WWDC25 Live Tracker • Real-time updates</p>
+                <p className="mt-1 text-xs">June 9-13, 2025 • A week of technology and creativity</p>
+                <p className="mt-2">
+                  {isConnected ? (
+                    <span className="flex items-center justify-center">
+                      <Wifi className="h-3 w-3 mr-1 text-green-500" /> Connected
+                    </span>
+                  ) : (
+                    <span className="flex items-center justify-center">
+                      <WifiOff className="h-3 w-3 mr-1 text-red-500" /> Disconnected
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
           </footer>
         </main>
       </div>
