@@ -373,22 +373,22 @@ export default function WWDC25LiveTracker() {
 
   return (
     <div className="min-h-screen relative overflow-hidden">
-      {/* WWDC25 Background with Glassmorphism */}
-      <div className="fixed inset-0 bg-gradient-to-br from-gray-100 via-white to-gray-200 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+      {/* WWDC25 Background with Apple-style Glassmorphism */}
+      <div className="fixed inset-0">
         {/* Floating Color Orbs */}
-        <div className="absolute top-20 left-20 w-96 h-96 bg-gradient-to-r from-blue-400/30 to-cyan-400/30 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute top-40 right-32 w-80 h-80 bg-gradient-to-r from-purple-400/30 to-pink-400/30 rounded-full blur-3xl animate-pulse delay-1000"></div>
-        <div className="absolute bottom-32 left-1/3 w-72 h-72 bg-gradient-to-r from-green-400/30 to-emerald-400/30 rounded-full blur-3xl animate-pulse delay-2000"></div>
-        <div className="absolute bottom-20 right-20 w-64 h-64 bg-gradient-to-r from-yellow-400/30 to-orange-400/30 rounded-full blur-3xl animate-pulse delay-3000"></div>
+        <div className="absolute top-20 left-20 w-96 h-96 bg-gradient-to-r from-blue-400/60 to-cyan-400/60 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute top-40 right-32 w-80 h-80 bg-gradient-to-r from-purple-400/60 to-pink-400/60 rounded-full blur-3xl animate-pulse delay-1000"></div>
+        <div className="absolute bottom-32 left-1/3 w-72 h-72 bg-gradient-to-r from-green-400/60 to-emerald-400/60 rounded-full blur-3xl animate-pulse delay-2000"></div>
+        <div className="absolute bottom-20 right-20 w-64 h-64 bg-gradient-to-r from-yellow-400/60 to-orange-400/60 rounded-full blur-3xl animate-pulse delay-3000"></div>
 
         {/* Glass overlay */}
-        <div className="absolute inset-0 bg-white/40 dark:bg-gray-900/40 backdrop-blur-sm"></div>
+        <div className="absolute inset-0 bg-white/10 dark:bg-gray-900/10 backdrop-blur-sm"></div>
       </div>
 
       {/* Content */}
       <div className="relative z-10">
         {/* Header */}
-        <header className="bg-white/20 dark:bg-gray-900/20 backdrop-blur-xl border-b border-white/20 dark:border-gray-700/20 sticky top-0 z-50">
+        <header className="bg-white/10 dark:bg-gray-900/10 backdrop-blur-2xl border-b border-white/30 dark:border-white/10 sticky top-0 z-50 shadow-lg">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-20">
               <div className="flex items-center space-x-4">
@@ -502,7 +502,7 @@ export default function WWDC25LiveTracker() {
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* API Error Alert */}
           {apiErrors.length > 0 && (
-            <Alert className="mb-6 bg-yellow-50/30 dark:bg-yellow-950/30 backdrop-blur-xl border-yellow-400/50">
+            <Alert className="mb-6 bg-yellow-50/20 dark:bg-yellow-950/20 backdrop-blur-2xl border border-yellow-400/30 ring-1 ring-yellow-400/20">
               <AlertCircle className="h-4 w-4 text-yellow-500" />
               <AlertDescription className="text-gray-800 dark:text-white">
                 <strong>RSS Issues:</strong> {apiErrors.join(", ")}
@@ -510,27 +510,15 @@ export default function WWDC25LiveTracker() {
             </Alert>
           )}
 
-          {/* Debug Info Alert */}
-          {Object.keys(debugInfo).length > 0 && (
-            <Alert className="mb-6 bg-blue-50/30 dark:bg-blue-950/30 backdrop-blur-xl border-blue-400/50">
-              <AlertCircle className="h-4 w-4 text-blue-500" />
-              <AlertDescription className="text-gray-800 dark:text-white">
-                <strong>RSS Debug:</strong>
-                {debugInfo.appleRss && ` Apple: ${debugInfo.appleRss.count || 0} articles`}
-                {debugInfo.macRss && ` | 9to5Mac: ${debugInfo.macRss.count || 0} articles`}
-              </AlertDescription>
-            </Alert>
-          )}
-
           {/* Keynote Status Alert */}
           {liveStatus && (
             <Alert
-              className={`mb-6 bg-white/30 dark:bg-gray-900/30 backdrop-blur-xl border-white/20 dark:border-gray-700/20 ${
+              className={`mb-6 backdrop-blur-2xl border ring-1 ${
                 liveStatus.isLive
-                  ? "border-red-400/50 bg-red-50/30 dark:bg-red-950/30"
+                  ? "border-red-400/30 bg-red-50/20 dark:bg-red-950/20 ring-red-400/20"
                   : liveStatus.minutesUntilKeynote && liveStatus.minutesUntilKeynote < 30
-                    ? "border-orange-400/50 bg-orange-50/30 dark:bg-orange-950/30"
-                    : "border-blue-400/50 bg-blue-50/30 dark:bg-blue-950/30"
+                    ? "border-orange-400/30 bg-orange-50/20 dark:bg-orange-950/20 ring-orange-400/20"
+                    : "border-blue-400/30 bg-blue-50/20 dark:bg-blue-950/20 ring-blue-400/20"
               }`}
             >
               <Clock
@@ -562,7 +550,7 @@ export default function WWDC25LiveTracker() {
             ].map((stat, index) => (
               <Card
                 key={index}
-                className="bg-white/30 dark:bg-gray-900/30 backdrop-blur-xl border-white/20 dark:border-gray-700/20 hover:bg-white/40 dark:hover:bg-gray-900/40 transition-all duration-300"
+                className="bg-white/20 dark:bg-gray-900/20 backdrop-blur-2xl border border-white/30 dark:border-white/10 hover:bg-white/30 dark:hover:bg-gray-900/30 transition-all duration-300 shadow-lg ring-1 ring-white/20 dark:ring-white/10"
               >
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-gray-700 dark:text-gray-300">{stat.title}</CardTitle>
@@ -580,7 +568,7 @@ export default function WWDC25LiveTracker() {
           </div>
 
           {/* Live WWDC25 Feed */}
-          <Card className="bg-white/30 dark:bg-gray-900/30 backdrop-blur-xl border-white/20 dark:border-gray-700/20">
+          <Card className="bg-white/20 dark:bg-gray-900/20 backdrop-blur-2xl border border-white/30 dark:border-white/10 shadow-lg ring-1 ring-white/20 dark:ring-white/10">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2 text-gray-800 dark:text-white">
                 <div
@@ -600,28 +588,28 @@ export default function WWDC25LiveTracker() {
               </CardDescription>
 
               <Tabs defaultValue="all" className="mt-2" onValueChange={handleTabChange}>
-                <TabsList className="grid grid-cols-4 md:w-[500px] bg-white/20 dark:bg-gray-800/20 backdrop-blur-xl border-white/20 dark:border-gray-700/20">
+                <TabsList className="grid grid-cols-4 md:w-[500px] bg-white/10 dark:bg-gray-800/10 backdrop-blur-2xl border border-white/30 dark:border-white/10 ring-1 ring-white/20 dark:ring-white/10">
                   <TabsTrigger
                     value="all"
-                    className="data-[state=active]:bg-white/40 dark:data-[state=active]:bg-gray-700/40"
+                    className="data-[state=active]:bg-white/30 dark:data-[state=active]:bg-gray-700/30 data-[state=active]:shadow-md data-[state=active]:backdrop-blur-2xl"
                   >
                     All Updates
                   </TabsTrigger>
                   <TabsTrigger
                     value="9to5mac"
-                    className="data-[state=active]:bg-white/40 dark:data-[state=active]:bg-gray-700/40"
+                    className="data-[state=active]:bg-white/30 dark:data-[state=active]:bg-gray-700/30 data-[state=active]:shadow-md data-[state=active]:backdrop-blur-2xl"
                   >
                     9to5Mac
                   </TabsTrigger>
                   <TabsTrigger
                     value="apple"
-                    className="data-[state=active]:bg-white/40 dark:data-[state=active]:bg-gray-700/40"
+                    className="data-[state=active]:bg-white/30 dark:data-[state=active]:bg-gray-700/30 data-[state=active]:shadow-md data-[state=active]:backdrop-blur-2xl"
                   >
                     Apple Official
                   </TabsTrigger>
                   <TabsTrigger
                     value="breaking"
-                    className="data-[state=active]:bg-white/40 dark:data-[state=active]:bg-gray-700/40"
+                    className="data-[state=active]:bg-white/30 dark:data-[state=active]:bg-gray-700/30 data-[state=active]:shadow-md data-[state=active]:backdrop-blur-2xl"
                   >
                     Breaking
                   </TabsTrigger>
@@ -656,8 +644,8 @@ export default function WWDC25LiveTracker() {
                     currentUpdates.map((update, index) => (
                       <div
                         key={update.id}
-                        className={`bg-white/20 dark:bg-gray-800/20 backdrop-blur-xl rounded-lg p-4 border border-white/10 dark:border-gray-700/10 transition-all duration-300 hover:bg-white/30 dark:hover:bg-gray-800/30 hover:shadow-lg ${
-                          update.isBreaking ? "border-red-400/50 bg-red-50/20 dark:bg-red-950/20" : ""
+                        className={`bg-white/20 dark:bg-gray-800/20 backdrop-blur-2xl rounded-lg p-4 border border-white/30 dark:border-white/10 transition-all duration-300 hover:bg-white/30 dark:hover:bg-gray-800/30 hover:shadow-lg ring-1 ring-white/20 dark:ring-white/10 ${
+                          update.isBreaking ? "border-red-400/50 bg-red-50/20 dark:bg-red-950/20 ring-red-400/30" : ""
                         }`}
                       >
                         <div className="flex items-start justify-between">
