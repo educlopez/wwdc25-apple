@@ -256,11 +256,6 @@ export default function WWDC25LiveTracker() {
           timestamp: new Date().toISOString(),
           minutes_remaining: liveStatusData.minutesUntilEnd,
         })
-
-        toast({
-          title: "🔴 WWDC25 Keynote Live!",
-          description: "Real-time updates are now flowing in",
-        })
       } else {
         console.log("⏸️ Not live - Current hour:", liveStatusData.currentHour)
       }
@@ -296,12 +291,7 @@ export default function WWDC25LiveTracker() {
       )
 
       if (!isLoading && totalUpdates > 0) {
-        toast({
-          title: "New updates available",
-          description: `${newsAllUpdates.length} news updates, ${appleAllUpdates.length} Apple official, ${macAllUpdates.length} 9to5Mac${breakingCount > 0 ? `, ${breakingCount} breaking` : ""}`,
-        })
-
-        // Track new updates
+        // Track new updates (no toast notification)
         track("new_updates", {
           news_count: newsAllUpdates.length,
           apple_count: appleAllUpdates.length,
@@ -347,12 +337,8 @@ export default function WWDC25LiveTracker() {
 
     let interval: NodeJS.Timeout
     if (autoRefresh) {
-      // More frequent updates during live stream
-      const refreshRate = liveStatus?.isLive
-        ? 5000 // Every 5 seconds when live for real-time coverage
-        : liveStatus?.minutesUntilKeynote && liveStatus.minutesUntilKeynote < 30
-          ? 30000 // Every 30 seconds when starting soon
-          : 60000 // Every 1 minute normally (faster for testing)
+      // Consistent 10-second updates for real-time notices
+      const refreshRate = 10000 // Every 10 seconds consistently
       interval = setInterval(fetchWWDC25Data, refreshRate)
     }
 
@@ -626,8 +612,6 @@ export default function WWDC25LiveTracker() {
             </Alert>
           )}
 
-          
-
           {/* Keynote Status Alert */}
           {liveStatus && (
             <Alert
@@ -667,11 +651,7 @@ export default function WWDC25LiveTracker() {
               {
                 title: "Last Updated",
                 value: lastUpdate.toLocaleTimeString("en-US"),
-                desc: liveStatus?.isLive
-                  ? "Every 5s"
-                  : liveStatus?.minutesUntilKeynote && liveStatus.minutesUntilKeynote < 30
-                    ? "Every 30s"
-                    : "Every 1min",
+                desc: "Every 10s",
               },
             ].map((stat, index) => (
               <Card
