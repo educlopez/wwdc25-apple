@@ -626,16 +626,7 @@ export default function WWDC25LiveTracker() {
             </Alert>
           )}
 
-          {/* Debug Info */}
-          {liveStatus && (
-            <Alert className="mb-6 bg-blue-50/30 dark:bg-blue-950/30 backdrop-blur-xl border-blue-400/50">
-              <AlertCircle className="h-4 w-4 text-blue-500" />
-              <AlertDescription className="text-gray-800 dark:text-white">
-                <strong>Debug:</strong> Current hour: {liveStatus.currentHour}, Live: {liveStatus.isLive ? "YES" : "NO"}
-                , Updates: {newsUpdates.length} news, {appleUpdates.length} Apple, {macUpdates.length} 9to5Mac
-              </AlertDescription>
-            </Alert>
-          )}
+          
 
           {/* Keynote Status Alert */}
           {liveStatus && (
