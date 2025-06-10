@@ -74,6 +74,9 @@ export default function WWDC25LiveTracker() {
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
+  const [macrumorsUpdates, setMacrumorsUpdates] = useState<WWDCUpdate[]>([]);
+
+  const [techcrunchUpdates, setTechcrunchUpdates] = useState<WWDCUpdate[]>([]);
 
   // Helper function to check if article is breaking (today or last hour)
   const isBreakingNews = (publishedAt: string, title: string) => {
@@ -172,63 +175,129 @@ export default function WWDC25LiveTracker() {
         // Use ref for previous updates to avoid dependency issues
         const previousIds = previousUpdatesRef.current;
 
-        // Fetch from RSS sources only
-        const [appleRssData, macRssData] = await Promise.allSettled([
-          fetch(`/api/apple-rss?t=${timestamp}`, {
-            cache: "no-store",
-            headers: {
-              "Cache-Control": "no-cache, no-store, must-revalidate",
-              Pragma: "no-cache",
-              Expires: "0",
-            },
-          }).then(async (res) => {
-            if (!res.ok) {
-              const errorText = await res.text();
-              console.error(`Apple RSS error response: ${errorText}`);
-              throw new Error(
-                `Apple RSS: ${res.status} - ${errorText.substring(0, 100)}`
-              );
-            }
+        // Fetch from all RSS sources
+        const [appleRssData, macRssData, macrumorsRssData, techcrunchRssData] =
+          await Promise.allSettled([
+            fetch(`/api/apple-rss?t=${timestamp}`, {
+              cache: "no-store",
+              headers: {
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                Pragma: "no-cache",
+                Expires: "0",
+              },
+            }).then(async (res) => {
+              if (!res.ok) {
+                const errorText = await res.text();
+                console.error(`Apple RSS error response: ${errorText}`);
+                throw new Error(
+                  `Apple RSS: ${res.status} - ${errorText.substring(0, 100)}`
+                );
+              }
 
-            const contentType = res.headers.get("content-type");
-            if (!contentType || !contentType.includes("application/json")) {
-              const errorText = await res.text();
-              console.error(`Apple RSS non-JSON response: ${errorText}`);
-              throw new Error(`Apple RSS: Expected JSON, got ${contentType}`);
-            }
+              const contentType = res.headers.get("content-type");
+              if (!contentType || !contentType.includes("application/json")) {
+                const errorText = await res.text();
+                console.error(`Apple RSS non-JSON response: ${errorText}`);
+                throw new Error(`Apple RSS: Expected JSON, got ${contentType}`);
+              }
 
-            return res.json();
-          }),
-          fetch(`/api/9to5mac-rss?t=${timestamp}`, {
-            cache: "no-store",
-            headers: {
-              "Cache-Control": "no-cache, no-store, must-revalidate",
-              Pragma: "no-cache",
-              Expires: "0",
-            },
-          }).then(async (res) => {
-            if (!res.ok) {
-              const errorText = await res.text();
-              console.error(`9to5Mac RSS error response: ${errorText}`);
-              throw new Error(
-                `9to5Mac RSS: ${res.status} - ${errorText.substring(0, 100)}`
-              );
-            }
+              return res.json();
+            }),
+            fetch(`/api/9to5mac-rss?t=${timestamp}`, {
+              cache: "no-store",
+              headers: {
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                Pragma: "no-cache",
+                Expires: "0",
+              },
+            }).then(async (res) => {
+              if (!res.ok) {
+                const errorText = await res.text();
+                console.error(`9to5Mac RSS error response: ${errorText}`);
+                throw new Error(
+                  `9to5Mac RSS: ${res.status} - ${errorText.substring(0, 100)}`
+                );
+              }
 
-            const contentType = res.headers.get("content-type");
-            if (!contentType || !contentType.includes("application/json")) {
-              const errorText = await res.text();
-              console.error(`9to5Mac RSS non-JSON response: ${errorText}`);
-              throw new Error(`9to5Mac RSS: Expected JSON, got ${contentType}`);
-            }
+              const contentType = res.headers.get("content-type");
+              if (!contentType || !contentType.includes("application/json")) {
+                const errorText = await res.text();
+                console.error(`9to5Mac RSS non-JSON response: ${errorText}`);
+                throw new Error(
+                  `9to5Mac RSS: Expected JSON, got ${contentType}`
+                );
+              }
 
-            return res.json();
-          }),
-        ]);
+              return res.json();
+            }),
+            fetch(`/api/macrumors-rss?t=${timestamp}`, {
+              cache: "no-store",
+              headers: {
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                Pragma: "no-cache",
+                Expires: "0",
+              },
+            }).then(async (res) => {
+              if (!res.ok) {
+                const errorText = await res.text();
+                console.error(`Macrumors RSS error response: ${errorText}`);
+                throw new Error(
+                  `Macrumors RSS: ${res.status} - ${errorText.substring(
+                    0,
+                    100
+                  )}`
+                );
+              }
+
+              const contentType = res.headers.get("content-type");
+              if (!contentType || !contentType.includes("application/json")) {
+                const errorText = await res.text();
+                console.error(`Macrumors RSS non-JSON response: ${errorText}`);
+                throw new Error(
+                  `Macrumors RSS: Expected JSON, got ${contentType}`
+                );
+              }
+
+              return res.json();
+            }),
+
+            fetch(`/api/techcrunch-rss?t=${timestamp}`, {
+              cache: "no-store",
+              headers: {
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                Pragma: "no-cache",
+                Expires: "0",
+              },
+            }).then(async (res) => {
+              if (!res.ok) {
+                const errorText = await res.text();
+                console.error(`TechCrunch RSS error response: ${errorText}`);
+                throw new Error(
+                  `TechCrunch RSS: ${res.status} - ${errorText.substring(
+                    0,
+                    100
+                  )}`
+                );
+              }
+
+              const contentType = res.headers.get("content-type");
+              if (!contentType || !contentType.includes("application/json")) {
+                const errorText = await res.text();
+                console.error(`TechCrunch RSS non-JSON response: ${errorText}`);
+                throw new Error(
+                  `TechCrunch RSS: Expected JSON, got ${contentType}`
+                );
+              }
+
+              return res.json();
+            }),
+          ]);
 
         const allArticles: WWDCUpdate[] = [];
         const appleAllUpdates: WWDCUpdate[] = [];
         const macAllUpdates: WWDCUpdate[] = [];
+        const macrumorsAllUpdates: WWDCUpdate[] = [];
+        const techcrunchAllUpdates: WWDCUpdate[] = [];
         const errors: string[] = [];
 
         // Process Apple Official RSS data
@@ -285,6 +354,64 @@ export default function WWDC25LiveTracker() {
           console.error("❌ 9to5Mac RSS failed:", macRssData.reason);
         }
 
+        // Process Macrumors RSS data
+        if (
+          macrumorsRssData.status === "fulfilled" &&
+          macrumorsRssData.value.articles
+        ) {
+          console.log(
+            "💻 Macrumors RSS returned",
+            macrumorsRssData.value.articles.length,
+            "articles"
+          );
+          const macrumorsArticles = macrumorsRssData.value.articles.map(
+            (article: any) => ({
+              id: `macrumors-${article.url}`,
+              timestamp: article.publishedAt,
+              type: "macrumors" as const,
+              title: article.title,
+              description: article.description,
+              url: article.url,
+              source: article.source.name,
+              isBreaking: isBreakingNews(article.publishedAt, article.title),
+            })
+          );
+          macrumorsAllUpdates.push(...macrumorsArticles);
+          allArticles.push(...macrumorsArticles);
+        } else if (macrumorsRssData.status === "rejected") {
+          errors.push(`Macrumors RSS: ${macrumorsRssData.reason.message}`);
+          console.error("❌ Macrumors RSS failed:", macrumorsRssData.reason);
+        }
+
+        // Process TechCrunch RSS data
+        if (
+          techcrunchRssData.status === "fulfilled" &&
+          techcrunchRssData.value.articles
+        ) {
+          console.log(
+            "💻 TechCrunch RSS returned",
+            techcrunchRssData.value.articles.length,
+            "articles"
+          );
+          const techcrunchArticles = techcrunchRssData.value.articles.map(
+            (article: any) => ({
+              id: `techcrunch-${article.url}`,
+              timestamp: article.publishedAt,
+              type: "techcrunch" as const,
+              title: article.title,
+              description: article.description,
+              url: article.url,
+              source: article.source.name,
+              isBreaking: isBreakingNews(article.publishedAt, article.title),
+            })
+          );
+          techcrunchAllUpdates.push(...techcrunchArticles);
+          allArticles.push(...techcrunchArticles);
+        } else if (techcrunchRssData.status === "rejected") {
+          errors.push(`TechCrunch RSS: ${techcrunchRssData.reason.message}`);
+          console.error("❌ TechCrunch RSS failed:", techcrunchRssData.reason);
+        }
+
         // Sort all arrays by timestamp and breaking news priority
         const sortUpdates = (updates: WWDCUpdate[]) => {
           return updates.sort((a, b) => {
@@ -306,6 +433,15 @@ export default function WWDC25LiveTracker() {
         const sortedAllUpdates = sortUpdates(allArticles).slice(0, 100);
         const sortedAppleUpdates = sortUpdates(appleAllUpdates).slice(0, 50);
         const sortedMacUpdates = sortUpdates(macAllUpdates).slice(0, 30);
+        const sortedMacrumorsUpdates = sortUpdates(macrumorsAllUpdates).slice(
+          0,
+          20
+        );
+
+        const sortedTechcrunchUpdates = sortUpdates(techcrunchAllUpdates).slice(
+          0,
+          10
+        );
 
         // Check if there are new updates
         const newIds = sortedAllUpdates.map((update) => update.id);
@@ -337,6 +473,8 @@ export default function WWDC25LiveTracker() {
         setAllUpdates(sortedAllUpdates);
         setAppleUpdates(sortedAppleUpdates);
         setMacUpdates(sortedMacUpdates);
+        setMacrumorsUpdates(sortedMacrumorsUpdates);
+        setTechcrunchUpdates(sortedTechcrunchUpdates);
         setLastUpdate(new Date());
         setIsConnected(true);
         setApiErrors(errors);
@@ -487,6 +625,10 @@ export default function WWDC25LiveTracker() {
         return appleUpdates;
       case "9to5mac":
         return macUpdates;
+      case "macrumors":
+        return macrumorsUpdates;
+      case "techcrunch":
+        return techcrunchUpdates;
       case "breaking":
         return allUpdates.filter((u) => u.isBreaking);
       default:
@@ -585,7 +727,7 @@ export default function WWDC25LiveTracker() {
                       onClick={handleAppleEventClick}
                     >
                       <Apple className="h-3 w-3" />
-                      <span>Watch Live</span>
+                      <span>Watch Keynote</span>
                     </a>
                   </Button>
                   <Button
@@ -797,6 +939,18 @@ export default function WWDC25LiveTracker() {
                     className="data-[state=active]:bg-white/30 dark:data-[state=active]:bg-gray-700/30 data-[state=active]:shadow-md data-[state=active]:backdrop-blur-2xl transition-all duration-200"
                   >
                     Apple Official
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="macrumors"
+                    className="data-[state=active]:bg-white/30 dark:data-[state=active]:bg-gray-700/30 data-[state=active]:shadow-md data-[state=active]:backdrop-blur-2xl transition-all duration-200"
+                  >
+                    Macrumors
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="techcrunch"
+                    className="data-[state=active]:bg-white/30 dark:data-[state=active]:bg-gray-700/30 data-[state=active]:shadow-md data-[state=active]:backdrop-blur-2xl transition-all duration-200"
+                  >
+                    TechCrunch
                   </TabsTrigger>
                   <TabsTrigger
                     value="breaking"
