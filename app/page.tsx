@@ -921,7 +921,7 @@ export default function WWDC25LiveTracker() {
                 className="mt-2"
                 onValueChange={handleTabChange}
               >
-                <TabsList className="grid grid-cols-4 md:w-[500px] bg-white/10 dark:bg-gray-800/10 backdrop-blur-2xl border border-white/30 dark:border-white/10 ring-1 ring-white/20 dark:ring-white/10">
+                <TabsList className="  bg-white/10 dark:bg-gray-800/10 backdrop-blur-2xl border border-white/30 dark:border-white/10 ring-1 ring-white/20 dark:ring-white/10">
                   <TabsTrigger
                     value="all"
                     className="data-[state=active]:bg-white/30 dark:data-[state=active]:bg-gray-700/30 data-[state=active]:shadow-md data-[state=active]:backdrop-blur-2xl transition-all duration-200"

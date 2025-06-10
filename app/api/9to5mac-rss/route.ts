@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server"
+import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
@@ -11,29 +11,31 @@ export async function GET() {
         Expires: "0",
       },
       cache: "no-store", // Disable Next.js caching
-    })
+    });
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch 9to5Mac RSS: ${response.status}`)
+      throw new Error(`Failed to fetch 9to5Mac RSS: ${response.status}`);
     }
 
-    const xmlText = await response.text()
-    console.log(`✅ 9to5Mac RSS fetched, length: ${xmlText.length}`)
+    const xmlText = await response.text();
+    console.log(`✅ 9to5Mac RSS fetched, length: ${xmlText.length}`);
 
     // Extract items using regex (more reliable than XML parsing in this environment)
-    const items = xmlText.match(/<item>[\s\S]*?<\/item>/g) || []
-    console.log(`📄 9to5Mac found ${items.length} items`)
+    const items = xmlText.match(/<item>[\s\S]*?<\/item>/g) || [];
+    console.log(`📄 9to5Mac found ${items.length} items`);
 
     const articles = items.map((item, index) => {
       // Extract title
       let title =
-        item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/)?.[1] || item.match(/<title>(.*?)<\/title>/)?.[1] || ""
+        item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/)?.[1] ||
+        item.match(/<title>(.*?)<\/title>/)?.[1] ||
+        "";
 
       // Extract description and clean HTML thoroughly
       let description =
         item.match(/<description><!\[CDATA\[(.*?)\]\]><\/description>/)?.[1] ||
         item.match(/<description>(.*?)<\/description>/)?.[1] ||
-        ""
+        "";
 
       // Comprehensive HTML cleaning
       description = description
@@ -50,38 +52,46 @@ export async function GET() {
         .replace(/&trade;/g, "™")
         .replace(/&[a-zA-Z0-9#]+;/g, " ")
         .replace(/\s+/g, " ")
-        .trim()
+        .trim();
 
-      if (description.length < 50 || description.includes("class=") || description.includes("src=")) {
-        const content = item.match(/<content:encoded><!\[CDATA\[(.*?)\]\]><\/content:encoded>/)?.[1] || ""
+      if (
+        description.length < 50 ||
+        description.includes("class=") ||
+        description.includes("src=")
+      ) {
+        const content =
+          item.match(
+            /<content:encoded><!\[CDATA\[(.*?)\]\]><\/content:encoded>/
+          )?.[1] || "";
         if (content) {
           description = content
             .replace(/<[^>]*>/g, " ")
             .replace(/&[a-zA-Z0-9#]+;/g, " ")
             .replace(/\s+/g, " ")
             .trim()
-            .substring(0, 300)
+            .substring(0, 300);
         } else {
-          description = "Read the latest Apple news and WWDC updates from 9to5Mac."
+          description =
+            "Read the latest Apple news and WWDC updates from 9to5Mac.";
         }
       }
 
       if (description.length > 300) {
-        description = description.substring(0, 300) + "..."
+        description = description.substring(0, 300) + "...";
       }
 
       // Extract link
-      const link = item.match(/<link>(.*?)<\/link>/)?.[1] || ""
+      const link = item.match(/<link>(.*?)<\/link>/)?.[1] || "";
 
       // Extract publication date
-      const pubDate = item.match(/<pubDate>(.*?)<\/pubDate>/)?.[1] || ""
+      const pubDate = item.match(/<pubDate>(.*?)<\/pubDate>/)?.[1] || "";
 
       // Extract author/creator
       const creator =
         item.match(/<dc:creator><!\[CDATA\[(.*?)\]\]><\/dc:creator>/)?.[1] ||
         item.match(/<dc:creator>(.*?)<\/dc:creator>/)?.[1] ||
         item.match(/<author>(.*?)<\/author>/)?.[1] ||
-        ""
+        "";
 
       // Clean title
       title = title
@@ -91,16 +101,18 @@ export async function GET() {
         .replace(/&quot;/g, '"')
         .replace(/&#39;/g, "'")
         .replace(/&nbsp;/g, " ")
-        .trim()
+        .trim();
 
       const article = {
         title: title,
         description: description,
         url: link.trim(),
-        publishedAt: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(),
+        publishedAt: pubDate
+          ? new Date(pubDate).toISOString()
+          : new Date().toISOString(),
         author: creator.trim() || undefined,
         source: { name: "9to5Mac" },
-      }
+      };
 
       // Log first few articles for debugging
       if (index < 3) {
@@ -109,15 +121,15 @@ export async function GET() {
           author: article.author,
           publishedAt: article.publishedAt,
           url: article.url.substring(0, 50),
-        })
+        });
       }
 
-      return article
-    })
+      return article;
+    });
 
     // Filter for Apple/WWDC related content
     const filteredArticles = articles.filter((article) => {
-      const content = `${article.title} ${article.description}`.toLowerCase()
+      const content = `${article.title} ${article.description}`.toLowerCase();
       const appleKeywords = [
         "apple",
         "ios",
@@ -142,26 +154,36 @@ export async function GET() {
         "developer",
         "cupertino",
         "apple park",
-      ]
+      ];
 
-      return appleKeywords.some((keyword) => content.includes(keyword))
-    })
+      return appleKeywords.some((keyword) => content.includes(keyword));
+    });
 
     // Sort by date (most recent first)
-    filteredArticles.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
+    filteredArticles.sort(
+      (a, b) =>
+        new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
+    );
 
-    console.log(`🔥 9to5Mac Filtered: ${filteredArticles.length} Apple-related articles`)
+    console.log(
+      `🔥 9to5Mac Filtered: ${filteredArticles.length} Apple-related articles`
+    );
 
     // Add some mock recent 9to5Mac articles for testing if no recent articles found
     const recentArticles = filteredArticles.filter(
-      (article) => new Date(article.publishedAt).getTime() > Date.now() - 24 * 60 * 60 * 1000,
-    )
+      (article) =>
+        new Date(article.publishedAt).getTime() >
+        Date.now() - 24 * 60 * 60 * 1000
+    );
 
     if (recentArticles.length === 0) {
-      console.log("⚠️ No recent 9to5Mac articles, adding mock data for testing")
+      console.log(
+        "⚠️ No recent 9to5Mac articles, adding mock data for testing"
+      );
       const mockArticles = [
         {
-          title: "🎨 Apple unveils iOS 26 with revolutionary new design language",
+          title:
+            "🎨 Apple unveils iOS 26 with revolutionary new design language",
           description:
             "Apple's iOS 26 introduces a completely redesigned interface with enhanced visual elements, improved accessibility features, and unified design across all platforms.",
           url: "https://9to5mac.com/2025/06/09/ios-26-new-design/",
@@ -170,7 +192,8 @@ export async function GET() {
           source: { name: "9to5Mac" },
         },
         {
-          title: "📱 iPadOS 26 announced with new windowing system and Files upgrades",
+          title:
+            "📱 iPadOS 26 announced with new windowing system and Files upgrades",
           description:
             "iPadOS 26 brings a revolutionary windowing system, enhanced multitasking, improved Files app, and new productivity features for iPad users.",
           url: "https://9to5mac.com/2025/06/09/ipados-26-windowing/",
@@ -187,8 +210,8 @@ export async function GET() {
           author: "Ryan Christoffel",
           source: { name: "9to5Mac" },
         },
-      ]
-      filteredArticles.unshift(...mockArticles)
+      ];
+      filteredArticles.unshift(...mockArticles);
     }
 
     return NextResponse.json({
@@ -199,9 +222,12 @@ export async function GET() {
         recentCount: recentArticles.length,
         lastFetch: new Date().toISOString(),
       },
-    })
+    });
   } catch (error) {
-    console.error("❌ 9to5Mac RSS error:", error)
-    return NextResponse.json({ error: "Failed to fetch 9to5Mac RSS data" }, { status: 500 })
+    console.error("❌ 9to5Mac RSS error:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch 9to5Mac RSS data" },
+      { status: 500 }
+    );
   }
 }
